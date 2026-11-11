@@ -1,0 +1,63 @@
+global:
+  resolve_timeout: 5m
+  # Proxy nếu có
+  http_config: {}
+
+# Cấu hình Mẫu thông báo (Templates)
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Cây định tuyến cảnh báo (Routing Tree)
+route:
+  group_by: ['alertname', 'namespace', 'pod_name', 'severity']
+  group_wait: 10s       # Chờ 10s để gộp các cảnh báo cùng nhóm
+  group_interval: 30s   # Gửi thông báo bổ sung sau 30s nếu có pod mới dính lỗi
+  repeat_interval: 2h   # Nhắc lại sau 2 giờ nếu sự cố chưa giải quyết
+  receiver: 'discord-notifications'
+
+  # Định tuyến phụ dựa trên mức độ nghiêm trọng
+  routes:
+    - match:
+        severity: critical
+      receiver: 'discord-critical-alerts'
+      repeat_interval: 30m
+
+    - match:
+        severity: warning
+      receiver: 'discord-notifications'
+      repeat_interval: 2h
+
+# Quy tắc ức chế cảnh báo (Inhibit Rules): Khi có lỗi Critical, tạm dừng các Warning trùng lặp
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'namespace', 'pod_name']
+
+# Danh sách người nhận cảnh báo (Receivers)
+receivers:
+  - name: 'discord-notifications'
+    webhook_configs:
+      - url: 'https://discord.com/api/webhooks/DISCORD_WEBHOOK_URL_HERE'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+
+  - name: 'discord-critical-alerts'
+    webhook_configs:
+      - url: 'https://discord.com/api/webhooks/DISCORD_WEBHOOK_URL_HERE'
+        send_resolved: true
+
+  - name: 'telegram-alerts'
+    telegram_configs:
+      - bot_token: 'YOUR_TELEGRAM_BOT_TOKEN'
+        chat_id: 123456789
+        send_resolved: true
+        parse_mode: 'HTML'
+        message: |
+          🔥 <b>CẢNH BÁO DEVOPS: {{ .CommonLabels.alertname }}</b>
+          Mức độ: <code>{{ .CommonLabels.severity }}</code>
+          Pod: <code>{{ .CommonLabels.pod_name }}</code>
+          Chi tiết: {{ .CommonAnnotations.description }}
+          Thời gian: {{ .StartsAt.Format "15:04:05 02/01/2006" }}

@@ -1,0 +1,48 @@
+# ==============================================================================
+# HELM VALUES CHO LOKI & PROMTAIL (TẬP TRUNG LOG TỪ STDOUT PODS)
+# ==============================================================================
+
+loki:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 10Gi
+  config:
+    table_manager:
+      retention_deletes_enabled: true
+      retention_period: 168h # 7 ngày
+    limits_config:
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+
+promtail:
+  enabled: true
+  config:
+    lokiAddress: http://loki:3100/loki/api/v1/push
+    snippets:
+      pipelineStages:
+        # Bước 1: Trích xuất log dạng JSON từ Pino Logger xuất ra stdout
+        - json:
+            expressions:
+              level: level
+              service: service
+              podName: podName
+              env: env
+              msg: msg
+              err: err
+
+        # Bước 2: Gán nhãn cho Loki để lọc tìm kiếm cực nhanh
+        - labels:
+            level:
+            service:
+            podName:
+            env:
+
+        # Bước 3: Định dạng lại log line hiển thị rõ ràng trên Grafana Explore
+        - template:
+            source: output_msg
+            template: '{{ if .err }}[{{ .level | ToUpper }}] {{ .msg }} - Error: {{ .err }}{{ else }}[{{ .level | ToUpper }}] {{ .msg }}{{ end }}'
+
+        - output:
+            source: output_msg

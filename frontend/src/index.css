@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: #4B3DFF;
+  --ink: #15130F;
+  --ink-muted: #4A4538;
+  --ink-placeholder: #6B6455;
+  --paper: #F5F0E6;
+  --paper-sidebar: #EDE6D6;
+  --paper-input: #FFFBF2;
+  --pastel-yellow: #FFD23F;
+  --pastel-mint: #86E3B8;
+  --pastel-periwinkle: #A5B0FF;
+  --pastel-orange: #FF8A4C;
+  --pastel-pink: #FF9CCB;
+  --pastel-purple: #D9B8FF;
+}
+
+@layer base {
+  body {
+    background-color: #F5F0E6;
+    color: #15130F;
+    font-family: 'Be Vietnam Pro', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ─── Dot Grid Background ─── */
+.bg-neo-grid {
+  background-color: #F5F0E6;
+  background-image: radial-gradient(circle, rgba(21, 19, 15, 0.15) 1.5px, transparent 1.5px);
+  background-size: 26px 26px;
+}
+
+/* ─── Custom Neo-Brutalist Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #15130F;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4A4538;
+}
+
+/* ─── Neo Interactive Classes ─── */
+.neo-btn {
+  min-height: 44px;
+  border: 2px solid #15130F;
+  box-shadow: 3px 3px 0 #15130F;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  user-select: none;
+}
+
+.neo-btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 #15130F;
+}
+
+.neo-btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 #15130F;
+}
+
+.neo-btn:focus-visible {
+  outline: 3px solid #15130F;
+  outline-offset: 2px;
+}
+
+.neo-btn-primary {
+  min-height: 44px;
+  border: 2px solid #15130F;
+  box-shadow: 5px 5px 0 #15130F;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  user-select: none;
+}
+
+.neo-btn-primary:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 3px 3px 0 #15130F;
+}
+
+.neo-btn-primary:active {
+  transform: translate(5px, 5px);
+  box-shadow: 0 0 0 #15130F;
+}
+
+.neo-btn-primary:focus-visible {
+  outline: 3px solid #15130F;
+  outline-offset: 2px;
+}
+
+.neo-card-sm {
+  border: 2px solid #15130F;
+  box-shadow: 4px 4px 0 #15130F;
+}
+
+.neo-card-lg {
+  border: 2px solid #15130F;
+  box-shadow: 8px 8px 0 #15130F;
+}
+
+.neo-input {
+  min-height: 44px;
+  border: 2px solid #15130F;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.neo-input:focus {
+  outline: none;
+  box-shadow: 3px 3px 0 var(--accent);
+  border-color: #15130F;
+}
+
+.neo-input:focus-visible {
+  outline: none;
+}
+
+/* Animations */
+@keyframes neo-pop {
+  0% { transform: scale(0.96); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-neo-pop {
+  animation: neo-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

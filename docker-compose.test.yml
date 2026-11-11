@@ -1,0 +1,54 @@
+# ==============================================================================
+# DOCKER COMPOSE TEST CONFIGURATION FOR CI/CD PIPELINE
+# ==============================================================================
+services:
+  mongodb-test:
+    image: mongo:7.0-jammy
+    restart: "no"
+    environment:
+      MONGO_INITDB_DATABASE: chat_devops_test
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - test-network
+
+  redis-test:
+    image: redis:7-alpine
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 5
+    networks:
+      - test-network
+
+  backend-test-runner:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: builder
+    restart: "no"
+    environment:
+      NODE_ENV: test
+      PORT: 5099
+      POD_NAME: ci-test-runner
+      MONGO_URI: mongodb://mongodb-test:27017/chat_devops_test
+      REDIS_HOST: redis-test
+      REDIS_PORT: 6379
+      LOG_LEVEL: fatal
+    depends_on:
+      mongodb-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    command: ["npm", "run", "test:integration"]
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge

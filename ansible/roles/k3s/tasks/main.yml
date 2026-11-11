@@ -1,0 +1,70 @@
+---
+# ==============================================================================
+# ROLE: K3S (Lightweight Certified Kubernetes Cluster Deployment)
+# ==============================================================================
+
+# 1. CÀI ĐẶT TRÊN K3S MASTER NODE
+- name: Kiểm tra trạng thái K3s Master đã cài đặt chưa
+  command: systemctl is-active k3s
+  register: k3s_master_status
+  failed_when: false
+  changed_when: false
+  when: "'k3s_master' in group_names"
+
+- name: Cài đặt K3s Control Plane (Master Node)
+  shell: |
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
+      --write-kubeconfig-mode 644 \
+      --disable traefik \
+      --node-name {{ node_name }} \
+      --tls-san {{ ansible_host }}" sh -
+  when:
+    - "'k3s_master' in group_names"
+    - k3s_master_status.rc != 0
+
+- name: Đợi dịch vụ K3s Server sẵn sàng
+  wait_for:
+    port: 6443
+    delay: 5
+    timeout: 60
+  when: "'k3s_master' in group_names"
+
+- name: Trích xuất K3s Cluster Join Token từ Master
+  slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_base64
+  when: "'k3s_master' in group_names"
+
+- name: Lưu trữ Token thành fact toàn cục
+  set_fact:
+    k3s_join_token: "{{ k3s_token_base64.content | b64decode | trim }}"
+  when: "'k3s_master' in group_names"
+
+# 2. CÀI ĐẶT TRÊN K3S WORKER NODES
+- name: Kiểm tra trạng thái K3s Agent trên Worker
+  command: systemctl is-active k3s-agent
+  register: k3s_worker_status
+  failed_when: false
+  changed_when: false
+  when: "'k3s_workers' in group_names"
+
+- name: Cài đặt K3s Agent và gia nhập cụm K3s Cluster
+  shell: |
+    curl -sfL https://get.k3s.io | K3S_URL="https://{{ hostvars[groups['k3s_master'][0]]['ansible_host'] }}:6443" \
+      K3S_TOKEN="{{ hostvars[groups['k3s_master'][0]]['k3s_join_token'] }}" \
+      INSTALL_K3S_EXEC="agent --node-name {{ node_name }}" sh -
+  when:
+    - "'k3s_workers' in group_names"
+    - k3s_worker_status.rc != 0
+
+# 3. TIỆN ÍCH QUẢN TRỊ VIÊN
+- name: Cấu hình alias 'k=kubectl' và bash completion cho tiện quản trị
+  lineinfile:
+    dest: "/home/{{ ansible_user }}/.bashrc"
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "alias k='kubectl'"
+    - "source <(kubectl completion bash)"
+    - "complete -o default -F __start_kubectl k"
+  when: "'k3s_master' in group_names"

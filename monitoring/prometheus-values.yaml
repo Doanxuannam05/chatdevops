@@ -1,0 +1,85 @@
+# ==============================================================================
+# HELM VALUES CHO KUBE-PROMETHEUS-STACK
+# ==============================================================================
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+    # Tự động scrape các Pod có annotation prometheus.io/scrape: "true"
+    additionalScrapeConfigs:
+      - job_name: 'kubernetes-pods-scrape'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+      - job_name: 'chat-backend-pods'
+        metrics_path: /metrics
+        scrape_interval: 5s
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: backend-service
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: http-ws
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod_name
+
+      - job_name: 'node-exporter'
+        static_configs:
+          - targets: ['localhost:9100']
+
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ['alertname', 'namespace', 'pod_name']
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 4h
+      receiver: 'discord-webhook'
+    receivers:
+      - name: 'discord-webhook'
+        webhook_configs:
+          - url: 'https://discord.com/api/webhooks/YOUR_WEBHOOK_URL'
+            send_resolved: true
+
+grafana:
+  enabled: true
+  adminPassword: "DevOpsAdmin2026Password"
+  persistence:
+    enabled: true
+    size: 5Gi

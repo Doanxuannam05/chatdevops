@@ -1,0 +1,51 @@
+---
+# ==============================================================================
+# ROLE: JENKINS AGENT & CONTROLLER TOOLS
+# Cài đặt môi trường thực thi CI/CD Pipeline: Java 17, Kubectl, Helm, Trivy
+# ==============================================================================
+
+- name: Cài đặt OpenJDK 17 Runtime cho Jenkins
+  apt:
+    name: openjdk-17-jdk
+    state: present
+    update_cache: yes
+
+- name: Cài đặt Kubectl CLI mới nhất
+  shell: |
+    curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg --yes
+    echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+    apt-get update -y
+    apt-get install -y kubectl
+  args:
+    creates: /usr/bin/kubectl
+
+- name: Cài đặt Helm Package Manager (v3)
+  shell: |
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  args:
+    creates: /usr/local/bin/helm
+
+- name: Cài đặt Trivy Container Vulnerability Scanner
+  shell: |
+    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+  args:
+    creates: /usr/local/bin/trivy
+
+- name: Tạo thư mục .kube cho user ubuntu/jenkins
+  file:
+    path: "/home/{{ ansible_user }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0700'
+
+- name: Đồng bộ kubeconfig từ K3s Master sang máy chủ Jenkins
+  copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "/home/{{ ansible_user }}/.kube/config"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0600'
+    remote_src: yes
+  delegate_to: "{{ groups['k3s_master'][0] }}"
+  ignore_errors: yes

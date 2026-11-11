@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔍 [Husky] Chạy kiểm tra bảo mật và chất lượng mã nguồn trước khi commit..."
+
+# 1. Quét Secret bằng Gitleaks nếu được cài đặt
+if command -v gitleaks >/dev/null 2>&1; then
+    echo "🛡️ [Gitleaks] Đang quét phát hiện secrets/passwords..."
+    gitleaks protect --staged --verbose --redact || {
+        echo "❌ [Gitleaks] Phát hiện bí mật/mật khẩu trong code staged! Hủy bỏ commit để bảo mật."
+        exit 1
+    }
+fi
+
+# 2. Kiểm tra Backend Types & Linting
+echo "🧪 [Backend] Kiểm tra biên dịch TypeScript..."
+npm --prefix backend run build || {
+    echo "❌ [Backend] Lỗi biên dịch TypeScript! Vui lòng sửa lỗi trước khi commit."
+    exit 1
+}
+
+echo "✅ [Husky] Tất cả kiểm tra hợp lệ. Cho phép commit!"

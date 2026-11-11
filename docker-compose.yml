@@ -1,0 +1,145 @@
+services:
+  # ============================================================================
+  # 1. DATABASE: MongoDB (Users, Rooms, Message History)
+  # ============================================================================
+  mongodb:
+    image: mongo:7.0-jammy
+    container_name: chat-devops-mongodb
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_DATABASE: chat_devops
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ============================================================================
+  # 2. MESSAGE BROKER: Redis 7 Alpine (WebSocket Pub/Sub Multi-Pod Adapter)
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: chat-devops-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================================
+  # 3. BACKEND POD 1: Node.js + Express + Socket.io (Primary Node)
+  # ============================================================================
+  backend-1:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chat-devops-backend-1
+    restart: unless-stopped
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      POD_NAME: backend-pod-alpha
+      MONGO_URI: mongodb://mongodb:27017/chat_devops
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: info
+      CORS_ORIGIN: "*"
+    ports:
+      - "5001:5000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # 4. BACKEND POD 2: Node.js + Express + Socket.io (Secondary Node for Pub/Sub Demo)
+  # ============================================================================
+  backend-2:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chat-devops-backend-2
+    restart: unless-stopped
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      POD_NAME: backend-pod-beta
+      MONGO_URI: mongodb://mongodb:27017/chat_devops
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LOG_LEVEL: info
+      CORS_ORIGIN: "*"
+    ports:
+      - "5002:5000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # 5. FRONTEND & REVERSE PROXY: React 18 SPA + Nginx Load Balancer
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: chat-devops-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    depends_on:
+      backend-1:
+        condition: service_healthy
+      backend-2:
+        condition: service_healthy
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mongo_data:
+    name: chat_devops_mongo_data
+  redis_data:
+    name: chat_devops_redis_data
+
+networks:
+  chat-network:
+    name: chat_devops_network
+    driver: bridge

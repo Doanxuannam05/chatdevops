@@ -1,0 +1,70 @@
+---
+# ==============================================================================
+# ROLE: COMMON (Baseline Server Preparation & Hardening)
+# ==============================================================================
+
+- name: Cập nhật danh sách gói APT cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Cài đặt các gói công cụ quản trị hệ thống thiết yếu
+  apt:
+    name:
+      - curl
+      - wget
+      - git
+      - htop
+      - iotop
+      - jq
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - apt-transport-https
+      - software-properties-common
+      - net-tools
+      - ufw
+      - fail2ban
+    state: present
+
+- name: Thiết lập múi giờ Việt Nam (Asia/Ho_Chi_Minh)
+  timezone:
+    name: Asia/Ho_Chi_Minh
+
+- name: Tắt hoàn toàn bộ nhớ Swap tạm thời (Bắt buộc cho Kubelet/K8s)
+  command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+
+- name: Vô hiệu hóa phân vùng Swap vĩnh viễn trong /etc/fstab
+  replace:
+    path: /etc/fstab
+    regexp: '^(\s*[^#\s]+\s+none\s+swap\s+.*)$'
+    replace: '# \1'
+
+- name: Kích hoạt Kernel Modules cần thiết cho mạng Kubernetes (overlay, br_netfilter)
+  modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Cấu hình tự động nạp Kernel Modules khi máy chủ khởi động
+  copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+    mode: '0644'
+
+- name: Thiết lập tham số Sysctl cho luồng mạng cầu nối (Bridge Traffic)
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+    sysctl_file: /etc/sysctl.d/99-kubernetes-cri.conf
+  loop:
+    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+    - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+    - { name: 'net.ipv4.ip_forward', value: '1' }

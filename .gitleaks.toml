@@ -1,0 +1,37 @@
+# Gitleaks Configuration for Realtime Chat DevOps
+title = "gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for example environment templates and test mocks"
+paths = [
+    '''\.env\.example$''',
+    '''terraform\.tfvars\.example$''',
+    '''tests/fixtures/.*''',
+    '''README\.md$''',
+    '''RUNBOOK\.md$'''
+]
+
+# Additional custom rules for this project
+[[rules]]
+id = "mongodb-connection-string-with-password"
+description = "MongoDB connection string containing password"
+regex = '''mongodb(\+srv)?:\/\/[a-zA-Z0-9_\-\.]+:[a-zA-Z0-9_\-\.\@\#\$\%\^\&\*\!\~]+@[a-zA-Z0-9_\-\.]+'''
+secretGroup = 0
+tags = ["key", "mongodb", "database"]
+
+[[rules]]
+id = "redis-auth-string"
+description = "Redis URI with embedded authentication"
+regex = '''redis:\/\/:[a-zA-Z0-9_\-\.\@\#\$\%\^\&\*\!\~]+@[a-zA-Z0-9_\-\.]+'''
+secretGroup = 0
+tags = ["key", "redis", "database"]
+
+[[rules]]
+id = "ansible-vault-unencrypted-secret"
+description = "Ansible plain secret in variables"
+regex = '''(?i)(ansible_password|vault_secret_key)\s*:\s*["'][^"'\n]{6,}["']'''
+secretGroup = 0
+tags = ["ansible", "credentials"]

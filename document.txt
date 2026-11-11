@@ -1,0 +1,13 @@
+# Khởi động toàn bộ cụm (hoặc có thể dùng: npm start hoặc npm run dev)
+docker compose up -d
+
+# Xem trạng thái sức khỏe 5 container
+docker compose ps
+# (hoặc: npm run status)
+
+# Xem nhật ký (logs) thời gian thực của các container
+docker compose logs -f
+
+# Dừng toàn bộ hệ thống
+docker compose down
+# (hoặc: npm run stop)

@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: chat-staging
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging

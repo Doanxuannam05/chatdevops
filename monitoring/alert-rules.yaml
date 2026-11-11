@@ -1,0 +1,65 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: chat-devops-alerts
+  labels:
+    role: alert-rules
+    app: chat-devops
+spec:
+  groups:
+    - name: chat_devops_realtime_alerts
+      rules:
+        # CẢNH BÁO 1: Số lượng kết nối WebSocket trên Pod vượt ngưỡng 500 kết nối
+        - alert: HighWebSocketConnections
+          expr: ws_active_connections > 500
+          for: 2m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Cảnh báo tải WebSocket quá cao trên Pod {{ $labels.pod_name }}"
+            description: "Số lượng kết nối đồng thời trên Pod {{ $labels.pod_name }} hiện tại là {{ $value }} (vượt ngưỡng 500 kết nối). HPA chuẩn bị kích hoạt scale-out."
+
+        # CẢNH BÁO 2: Tỷ lệ lỗi HTTP 5xx vượt quá 5% trong 2 phút
+        - alert: High5xxErrorRate
+          expr: (sum(rate(http_requests_total{status_code=~"5.."}[2m])) by (pod_name) / sum(rate(http_requests_total[2m])) by (pod_name)) * 100 > 5
+          for: 2m
+          labels:
+            severity: critical
+            team: devops
+          annotations:
+            summary: "Tỷ lệ lỗi HTTP 5xx cao bất thường trên Pod {{ $labels.pod_name }}"
+            description: "Pod {{ $labels.pod_name }} đang có tỷ lệ lỗi 5xx là {{ $value | printf '%.2f' }}% (> 5%). Đề nghị kiểm tra ngay logs hệ thống."
+
+        # CẢNH BÁO 3: Độ trễ P95 HTTP Request vượt quá 500ms
+        - alert: HighLatencyP95
+          expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, pod_name)) > 0.5
+          for: 3m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Độ trễ P95 phản hồi chậm (> 500ms) trên {{ $labels.pod_name }}"
+            description: "Độ trễ xử lý 95% request trên {{ $labels.pod_name }} đang đạt {{ $value | printf '%.3f' }}s. Có nguy cơ nghẽn I/O Database hoặc Redis."
+
+        # CẢNH BÁO 4: Pod liên tục khởi động lại (CrashLoopBackOff)
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total{container="backend"}[5m]) * 60 > 2
+          for: 2m
+          labels:
+            severity: critical
+            team: devops
+          annotations:
+            summary: "Backend Container liên tục bị restart trong cụm Kubernetes"
+            description: "Container backend trên Pod {{ $labels.pod }} đã khởi động lại hơn 2 lần trong 5 phút vừa qua."
+
+        # CẢNH BÁO 5: Mức sử dụng bộ nhớ RAM của Pod vượt ngưỡng 85% Limit
+        - alert: HighPodMemoryUsage
+          expr: (container_memory_working_set_bytes{container="backend"} / container_spec_memory_limit_bytes{container="backend"}) * 100 > 85
+          for: 3m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Bộ nhớ Pod backend sắp chạm ngưỡng OOMKilled"
+            description: "Pod {{ $labels.pod }} đang sử dụng {{ $value | printf '%.2f' }}% RAM giới hạn. Đề nghị kiểm tra Memory Leak hoặc tăng Resource Limit."

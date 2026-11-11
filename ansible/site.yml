@@ -1,0 +1,48 @@
+---
+# ==============================================================================
+# MAIN ANSIBLE PLAYBOOK: ORCHESTRATING CLOUD-NATIVE DEVOPS INFRASTRUCTURE
+# ==============================================================================
+
+# GIAI ĐOẠN 1: Chuẩn bị nền tảng hệ điều hành, Docker và Node Exporter trên toàn bộ máy chủ
+- name: Bước 1 - Cấu hình Nền tảng chung, Docker Engine và Giám sát trên tất cả máy chủ
+  hosts: all
+  become: yes
+  roles:
+    - common
+    - docker
+    - node_exporter
+
+# GIAI ĐOẠN 2: Thiết lập máy chủ CI/CD Jenkins Controller & Agent Tools
+- name: Bước 2 - Thiết lập Công cụ Pipeline trên Jenkins Controller
+  hosts: jenkins_controller
+  become: yes
+  roles:
+    - jenkins_agent
+
+# GIAI ĐOẠN 3: Khởi tạo cụm Kubernetes K3s Control Plane (Master Node)
+- name: Bước 3 - Khởi tạo K3s Control Plane
+  hosts: k3s_master
+  become: yes
+  roles:
+    - k3s
+
+# GIAI ĐOẠN 4: Mở rộng cụm kết nạp K3s Worker Nodes
+- name: Bước 4 - Kết nạp Worker Nodes vào cụm Kubernetes
+  hosts: k3s_workers
+  become: yes
+  roles:
+    - k3s
+
+# GIAI ĐOẠN 5: Kiểm tra xác thực trạng thái cụm K3s sau khi triển khai
+- name: Bước 5 - Xác thực tình trạng cụm Kubernetes
+  hosts: k3s_master
+  become: yes
+  tasks:
+    - name: Kiểm tra danh sách các Node trong cụm
+      command: kubectl get nodes -o wide
+      register: k8s_nodes_output
+      changed_when: false
+
+    - name: Hiển thị kết quả kiểm tra cụm Node
+      debug:
+        msg: "{{ k8s_nodes_output.stdout_lines }}"

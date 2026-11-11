@@ -1,0 +1,48 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: isolate-database-and-broker
+  labels:
+    app: chat-devops
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: ["mongodb", "redis"]
+  policyTypes:
+    - Ingress
+  ingress:
+    # Chỉ duy nhất các Pod có nhãn 'app: backend' mới được phép kết nối vào MongoDB và Redis
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 27017
+        - protocol: TCP
+          port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-traffic
+  labels:
+    app: chat-devops
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    # Backend chấp nhận kết nối từ Frontend Pod và từ Ingress Controller
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5000

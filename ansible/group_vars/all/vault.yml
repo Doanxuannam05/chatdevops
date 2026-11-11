@@ -1,0 +1,20 @@
+# ==============================================================================
+# ANSIBLE VAULT ENCRYPTED SECRETS (MÃ HÓA BẢO MẬT)
+# Cách mã hóa: ansible-vault encrypt ansible/group_vars/all/vault.yml
+# Cách chỉnh sửa: ansible-vault edit ansible/group_vars/all/vault.yml
+# ==============================================================================
+
+# K3s Cluster Secret Token (Dùng để Worker Node kết nối vào Master)
+vault_k3s_token: "K3sSecretClusterTokenDevops2026SecureHash99"
+
+# Thông tin đăng nhập Container Registry (Docker Hub / Harbor) cho Jenkins Pipeline
+vault_docker_registry_user: "devopsadmin"
+vault_docker_registry_password: "SuperSecretRegistryPassword2026!"
+vault_docker_registry_url: "https://index.docker.io/v1/"
+
+# Thông tin xác thực CSDL và Broker
+vault_mongodb_root_password: "MongoDbProdSecret2026Password!"
+vault_redis_password: "RedisPubSubClusterPassword2026!"
+
+# Webhook cảnh báo (Discord / Slack / Telegram)
+vault_alertmanager_discord_webhook: "https://discord.com/api/webhooks/123456789/devops-alerts"
