@@ -18,7 +18,7 @@ pipeline {
     environment {
         DOCKER_REGISTRY     = 'docker.io'
         DOCKER_CREDENTIALS  = 'docker-hub-credentials'
-        DISCORD_WEBHOOK     = credentials('discord-ci-webhook')
+        // DISCORD_WEBHOOK     = credentials('discord-ci-webhook') // Bật khi đã thêm Secret text 'discord-ci-webhook' trong Jenkins
         IMAGE_BACKEND       = 'devopsadmin/chat-backend'
         IMAGE_FRONTEND      = 'devopsadmin/chat-frontend'
         IMAGE_TAG           = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
