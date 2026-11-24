@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IUser extends Document {
   username: string;
+  password?: string;
   avatar: string;
   isOnline: boolean;
   currentRoom?: string;
@@ -17,9 +18,14 @@ const UserSchema: Schema = new Schema(
       trim: true,
       index: true,
     },
+    password: {
+      type: String,
+      required: false,
+      select: false,
+    },
     avatar: {
       type: String,
-      default: 'https://api.dicebear.com/7.x/bottts/svg?seed=devops',
+      default: '1',
     },
     isOnline: {
       type: Boolean,
@@ -36,6 +42,12 @@ const UserSchema: Schema = new Schema(
   },
   {
     timestamps: true,
+    toJSON: {
+      transform(_doc, ret) {
+        delete ret.password;
+        return ret;
+      },
+    },
   }
 );
 

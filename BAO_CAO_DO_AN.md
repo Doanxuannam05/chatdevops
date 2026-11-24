@@ -530,6 +530,20 @@ flowchart LR
 11. **Giai đoạn 11 (Manual Approval Gate):** Tạm dừng pipeline chờ phê duyệt của Tech Lead / Release Manager trước khi đưa lên môi trường người dùng cuối.
 12. **Giai đoạn 12 (Zero-downtime Deploy to Production):** Áp dụng Kustomize lên namespace `chat-prod`, theo dõi `kubectl rollout status` để đảm bảo hệ thống chuyển đổi phiên bản trơn tru.
 
+#### Kết quả thực thi thực tế trên Jenkins Dashboard (Hình 6.1)
+
+![Hình 6.1: Kết quả thực thi thực tế Jenkins Declarative Pipeline (Lượt build #5 - Thành công toàn bộ 12 giai đoạn)](docs/images/demo-jenkins-pipeline-success.png)
+
+*Hình 6.1: Kết quả thực thi thực tế Jenkins Declarative Pipeline (Lượt build #5 - Thành công toàn bộ 12 giai đoạn)*
+
+* **Phân tích kết quả thực nghiệm CI/CD (Hình 6.1):**
+  - **Trạng thái tổng thể:** Lượt build **`#5`** thực thi thành công mỹ mãn (**SUCCESS**) toàn bộ từ giai đoạn khởi tạo cho tới giai đoạn triển khai Production và dọn dẹp không gian làm việc (`Post Actions`), tổng thời gian thực thi: **$3\text{ phút } 50\text{ giây}$**.
+  - **Giai đoạn 4 (Docker Compose Integration Test):** Thực thi kiểm thử tích hợp thực tế trong **$2\text{ phút } 29\text{ giây}$**, xác nhận các container Redis, MongoDB và backend-test-runner hoạt động đồng bộ trước khi đóng gói.
+  - **Giai đoạn 6 (Docker Multi-Stage Build):** Thực thi đóng gói thực tế trong **$52\text{ giây}$**, xuất ra 2 container image hoàn chỉnh cho Backend và Frontend.
+  - **Lịch sử sửa lỗi (Troubleshooting Evolution):** Bảng Stage View thể hiện rõ ràng quá trình cải tiến kỹ thuật của nhóm:
+    - Các lượt build ban đầu (`#1`, `#2`, `#3`, `#4`) gặp lỗi cú pháp cấu hình môi trường (AnsiColor plugin, POSIX redirection `/bin/sh`).
+    - Lượt build **`#5`** khắc phục hoàn toàn tất cả các lỗi trên, đạt trạng thái **100% xanh lá cây (Full Green Pipeline)**, khẳng định năng lực làm chủ quy trình DevOps và tư duy giải quyết sự cố của cả nhóm.
+
 ---
 
 ## CHƯƠNG 7: GIÁM SÁT, QUẢN LÝ NHẬT KÝ & VẬN HÀNH SRE

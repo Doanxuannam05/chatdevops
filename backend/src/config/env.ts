@@ -23,6 +23,7 @@ const envSchema = z.object({
   // CORS and Security
   CORS_ORIGIN: z.string().default('*'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  JWT_SECRET: z.string().default('chat-devops-jwt-super-secret-key-change-in-production'),
 });
 
 const parsed = envSchema.safeParse(process.env);

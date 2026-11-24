@@ -83,6 +83,40 @@ export function useSocket() {
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
 
+  // Validate stored session with backend on initial mount
+  useEffect(() => {
+    const token = localStorage.getItem('chat_devops_token');
+    if (token) {
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      fetch(`${apiUrl}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => {
+          if (res.ok) {
+            return res.json();
+          } else {
+            localStorage.removeItem('chat_devops_token');
+            localStorage.removeItem('chat_devops_user');
+            setCurrentUser(null);
+          }
+        })
+        .then((data) => {
+          if (data?.user) {
+            const profile: UserProfile = {
+              username: data.user.username,
+              avatar: data.user.avatar || '1',
+              isOnline: true,
+            };
+            setCurrentUser(profile);
+            localStorage.setItem('chat_devops_user', JSON.stringify(profile));
+          }
+        })
+        .catch(() => {
+          // Keep existing cached profile on network error
+        });
+    }
+  }, []);
+
   useEffect(() => {
     const socketUrl = import.meta.env.VITE_WS_URL || window.location.origin;
     const socket = io(socketUrl, {
@@ -101,9 +135,11 @@ export function useSocket() {
 
       // 1. Sync user session if already logged in
       if (currentUserRef.current) {
+        const token = localStorage.getItem('chat_devops_token') || undefined;
         socket.emit('user_login', {
           username: currentUserRef.current.username,
           avatar: currentUserRef.current.avatar,
+          token,
         });
       }
 
@@ -349,23 +385,107 @@ export function useSocket() {
   );
 
   const login = useCallback(
-    (username: string, customAvatar?: string) => {
-      const avatar = customAvatar || '1';
-      const profile: UserProfile = { username, avatar, isOnline: true };
-      setCurrentUser(profile);
-      localStorage.setItem('chat_devops_user', JSON.stringify(profile));
+    async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        const res = await fetch(`${apiUrl}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
 
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('user_login', { username, avatar });
-        socketRef.current.emit('join_room', { roomId: currentRoom, username });
+        const data = await res.json();
+        if (!res.ok) {
+          return { success: false, error: data.error || 'Đăng nhập không thành công' };
+        }
+
+        const profile: UserProfile = {
+          username: data.user.username,
+          avatar: data.user.avatar || '1',
+          isOnline: true,
+        };
+
+        setCurrentUser(profile);
+        localStorage.setItem('chat_devops_token', data.token);
+        localStorage.setItem('chat_devops_user', JSON.stringify(profile));
+
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('user_login', {
+            username: profile.username,
+            avatar: profile.avatar,
+            token: data.token,
+          });
+          socketRef.current.emit('join_room', { roomId: currentRoomRef.current, username: profile.username });
+        }
+
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'Không thể kết nối đến máy chủ' };
       }
     },
-    [currentRoom]
+    []
   );
 
-  const logout = useCallback(() => {
-    setCurrentUser(null);
-    localStorage.removeItem('chat_devops_user');
+  const register = useCallback(
+    async (username: string, password: string, avatarId?: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        const res = await fetch(`${apiUrl}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, avatar: avatarId || '1' }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          return { success: false, error: data.error || 'Đăng ký không thành công' };
+        }
+
+        const profile: UserProfile = {
+          username: data.user.username,
+          avatar: data.user.avatar || avatarId || '1',
+          isOnline: true,
+        };
+
+        setCurrentUser(profile);
+        localStorage.setItem('chat_devops_token', data.token);
+        localStorage.setItem('chat_devops_user', JSON.stringify(profile));
+
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('user_login', {
+            username: profile.username,
+            avatar: profile.avatar,
+            token: data.token,
+          });
+          socketRef.current.emit('join_room', { roomId: currentRoomRef.current, username: profile.username });
+        }
+
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: err?.message || 'Không thể kết nối đến máy chủ' };
+      }
+    },
+    []
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('chat_devops_token');
+      if (token) {
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        await fetch(`${apiUrl}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }).catch(() => {});
+      }
+    } finally {
+      setCurrentUser(null);
+      localStorage.removeItem('chat_devops_user');
+      localStorage.removeItem('chat_devops_token');
+    }
   }, []);
 
   return {
@@ -382,6 +502,7 @@ export function useSocket() {
     sendTyping,
     reactMessage,
     login,
+    register,
     logout,
   };
 }

@@ -11,6 +11,7 @@ import healthRouter from './routes/health';
 import metricsRouter from './routes/metrics';
 import roomsRouter from './routes/rooms';
 import simulateErrorRouter from './routes/simulate-error';
+import authRouter from './routes/auth';
 import { initializeSocket, getRedisClient } from './socket';
 import { seedDefaultRooms } from './models/Room';
 
@@ -52,6 +53,7 @@ app.use(metricsMiddleware);
 app.use('/health', healthRouter);
 app.use('/metrics', metricsRouter);
 app.use('/api/rooms', roomsRouter);
+app.use('/api/auth', authRouter);
 app.use('/api/simulate-error', simulateErrorRouter);
 
 // Service Root Info
@@ -65,6 +67,7 @@ app.get('/', (req: Request, res: Response) => {
       health: '/health',
       metrics: '/metrics',
       rooms: '/api/rooms',
+      auth: '/api/auth',
       simulateError: '/api/simulate-error',
     },
   });

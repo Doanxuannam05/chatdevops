@@ -6,6 +6,7 @@ import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { Message } from '../models/Message';
 import { User } from '../models/User';
+import { verifyToken, TokenPayload } from '../utils/auth';
 import {
   wsActiveConnections,
   wsMessagesCounter,
@@ -110,16 +111,36 @@ export async function initializeSocket(httpServer: HttpServer): Promise<Server> 
     });
 
     // 1. User Authentication / Profile Sync
-    socket.on('user_login', async (data: { username: string; avatar?: string }) => {
+    socket.on('user_login', async (data: { username: string; avatar?: string; token?: string }) => {
       try {
-        const { username, avatar } = data;
+        const { username, avatar, token } = data;
+        let authenticatedUser = null;
+
+        if (token) {
+          const decoded = verifyToken<TokenPayload>(token);
+          if (decoded?.userId) {
+            authenticatedUser = await User.findById(decoded.userId);
+          }
+        }
+
+        if (authenticatedUser) {
+          authenticatedUser.isOnline = true;
+          authenticatedUser.lastSeen = new Date();
+          if (avatar) authenticatedUser.avatar = avatar;
+          await authenticatedUser.save();
+
+          socket.data.user = authenticatedUser;
+          socket.emit('user_login_success', authenticatedUser);
+          return;
+        }
+
         if (!username || typeof username !== 'string') return;
 
         const user = await User.findOneAndUpdate(
           { username: username.trim() },
           {
             $set: {
-              avatar: avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}`,
+              avatar: avatar || '1',
               isOnline: true,
               lastSeen: new Date(),
             },

@@ -18,12 +18,13 @@ export const App: React.FC = () => {
     sendTyping,
     reactMessage,
     login,
+    register,
     logout,
   } = useSocket();
 
   // Màn 1: Chưa đăng nhập -> Toàn màn hình Đăng Nhập (~1280x800)
   if (!currentUser) {
-    return <LoginModal onLogin={login} />;
+    return <LoginModal onLogin={login} onRegister={register} />;
   }
 
   // Màn 2: Đã đăng nhập -> Toàn màn hình Phòng Chat (~1440x900)
