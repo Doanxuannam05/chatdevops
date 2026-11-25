@@ -1,203 +1,164 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { User } from '../models/User';
-import { hashPassword, comparePassword, generateToken, verifyToken, TokenPayload } from '../utils/auth';
+import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
 const router = Router();
 
-/**
- * POST /api/auth/register
- * Register a new user account
- */
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derivedKey = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${derivedKey}`;
+}
+
+function verifyPassword(password: string, storedHash: string): boolean {
+  const parts = storedHash.split(':');
+  if (parts.length !== 2) return false;
+  const [salt, keyHex] = parts;
+  const keyBuffer = Buffer.from(keyHex, 'hex');
+  const derivedBuffer = crypto.scryptSync(password, salt, 64);
+  if (keyBuffer.length !== derivedBuffer.length) return false;
+  return crypto.timingSafeEqual(keyBuffer, derivedBuffer);
+}
+
+function signToken(payload: { username: string }): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(
+    JSON.stringify({
+      ...payload,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60,
+    })
+  ).toString('base64url');
+  const signature = crypto
+    .createHmac('sha256', env.JWT_SECRET)
+    .update(`${header}.${body}`)
+    .digest('base64url');
+  return `${header}.${body}.${signature}`;
+}
+
+function verifyToken(token: string): { username: string } | null {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [header, body, signature] = parts;
+  const expectedSig = crypto
+    .createHmac('sha256', env.JWT_SECRET)
+    .update(`${header}.${body}`)
+    .digest('base64url');
+  if (signature !== expectedSig) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { username, password, avatar } = req.body;
+    const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const avatar = typeof req.body?.avatar === 'string' && req.body.avatar.trim() ? req.body.avatar.trim() : '1';
 
-    if (!username || typeof username !== 'string' || username.trim().length === 0) {
-      return res.status(400).json({ error: 'Tên người dùng không được để trống' });
+    if (username.length < 2) {
+      return res.status(400).json({ error: 'Tên người dùng phải có ít nhất 2 ký tự' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Mật khẩu đăng ký phải có ít nhất 6 ký tự' });
     }
 
-    const trimmedUsername = username.trim();
-
-    if (trimmedUsername.length < 2 || trimmedUsername.length > 30) {
-      return res.status(400).json({ error: 'Tên người dùng phải từ 2 đến 30 ký tự' });
+    const existing = await User.findOne({ username }).select('+password');
+    if (existing && existing.password) {
+      return res.status(409).json({ error: 'Tên tài khoản đã tồn tại, vui lòng chọn tên khác' });
     }
 
-    if (!password || typeof password !== 'string' || password.length < 6) {
-      return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 6 ký tự' });
-    }
+    const passwordHash = hashPassword(password);
+    const user = existing
+      ? await User.findOneAndUpdate(
+          { _id: existing._id },
+          { $set: { password: passwordHash, avatar, isOnline: true, lastSeen: new Date() } },
+          { new: true }
+        )
+      : await User.create({
+          username,
+          password: passwordHash,
+          avatar,
+          isOnline: true,
+          lastSeen: new Date(),
+        });
 
-    // Check if user already exists (case-insensitive)
-    const existingUser = await User.findOne({
-      username: { $regex: new RegExp(`^${trimmedUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ error: 'Tên người dùng đã được sử dụng. Vui lòng chọn tên khác.' });
-    }
-
-    // Hash password
-    const hashedPassword = await hashPassword(password);
-
-    // Create user
-    const newUser = await User.create({
-      username: trimmedUsername,
-      password: hashedPassword,
-      avatar: (avatar && String(avatar)) || '1',
-      isOnline: true,
-      lastSeen: new Date(),
-    });
-
-    // Generate token
-    const token = generateToken({
-      userId: newUser._id.toString(),
-      username: newUser.username,
-      avatar: newUser.avatar,
-    });
-
-    logger.info({ userId: newUser._id, username: newUser.username }, 'User registered successfully');
+    const token = signToken({ username });
+    logger.info({ username, podName: env.POD_NAME }, 'User registered successfully');
 
     return res.status(201).json({
-      success: true,
-      message: 'Đăng ký tài khoản thành công',
       token,
       user: {
-        _id: newUser._id,
-        username: newUser.username,
-        avatar: newUser.avatar,
-        isOnline: newUser.isOnline,
-        lastSeen: newUser.lastSeen,
+        username: user!.username,
+        avatar: user!.avatar,
+        isOnline: true,
       },
     });
   } catch (err: any) {
-    logger.error({ err: err.message }, 'Error in user registration');
-    return res.status(500).json({ error: 'Lỗi hệ thống khi đăng ký tài khoản' });
+    logger.error({ err: err.message }, 'Error during user registration');
+    return res.status(500).json({ error: 'Lỗi máy chủ khi đăng ký' });
   }
 });
 
-/**
- * POST /api/auth/login
- * Authenticate existing user with username and password
- */
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { username, password } = req.body;
+    const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
 
-    if (!username || !password || typeof username !== 'string' || typeof password !== 'string') {
-      return res.status(400).json({ error: 'Vui lòng nhập tên đăng nhập và mật khẩu' });
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu' });
     }
 
-    const trimmedUsername = username.trim();
-
-    // Find user by username with password included
-    const user = await User.findOne({
-      username: { $regex: new RegExp(`^${trimmedUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-    }).select('+password');
-
-    if (!user) {
+    const user = await User.findOne({ username }).select('+password');
+    if (!user || !user.password || !verifyPassword(password, user.password)) {
       return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu không chính xác' });
     }
 
-    if (!user.password) {
-      // Legacy guest user without password - set new password
-      user.password = await hashPassword(password);
-      user.isOnline = true;
-      user.lastSeen = new Date();
-      await user.save();
-    } else {
-      const isMatch = await comparePassword(password, user.password);
-      if (!isMatch) {
-        return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu không chính xác' });
-      }
+    user.isOnline = true;
+    user.lastSeen = new Date();
+    await user.save();
 
-      user.isOnline = true;
-      user.lastSeen = new Date();
-      await user.save();
-    }
-
-    const token = generateToken({
-      userId: user._id.toString(),
-      username: user.username,
-      avatar: user.avatar,
-    });
-
-    logger.info({ userId: user._id, username: user.username }, 'User logged in successfully');
+    const token = signToken({ username: user.username });
+    logger.info({ username: user.username, podName: env.POD_NAME }, 'User logged in successfully');
 
     return res.status(200).json({
-      success: true,
-      message: 'Đăng nhập thành công',
       token,
       user: {
-        _id: user._id,
         username: user.username,
         avatar: user.avatar,
-        isOnline: user.isOnline,
-        lastSeen: user.lastSeen,
+        isOnline: true,
       },
     });
   } catch (err: any) {
-    logger.error({ err: err.message }, 'Error in user login');
-    return res.status(500).json({ error: 'Lỗi hệ thống khi đăng nhập' });
+    logger.error({ err: err.message }, 'Error during user login');
+    return res.status(500).json({ error: 'Lỗi máy chủ khi đăng nhập' });
   }
 });
 
-/**
- * GET /api/auth/me
- * Get current authenticated user profile
- */
-router.get('/me', async (req: Request, res: Response) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Chưa xác thực hoặc token không hợp lệ' });
-    }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken<TokenPayload>(token);
-
-    if (!decoded || !decoded.userId) {
-      return res.status(401).json({ error: 'Phiên làm việc đã hết hạn hoặc không hợp lệ' });
-    }
-
-    const user = await User.findById(decoded.userId);
-    if (!user) {
-      return res.status(404).json({ error: 'Không tìm thấy thông tin người dùng' });
-    }
-
-    return res.json({
-      success: true,
-      user: {
-        _id: user._id,
-        username: user.username,
-        avatar: user.avatar,
-        isOnline: user.isOnline,
-        lastSeen: user.lastSeen,
-      },
-    });
-  } catch (err: any) {
-    logger.error({ err: err.message }, 'Error in /api/auth/me');
-    return res.status(500).json({ error: 'Lỗi khi lấy thông tin người dùng' });
-  }
-});
-
-/**
- * POST /api/auth/logout
- * Log out user and update status
- */
 router.post('/logout', async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const decoded = verifyToken<TokenPayload>(token);
-      if (decoded?.userId) {
-        await User.findByIdAndUpdate(decoded.userId, { isOnline: false, lastSeen: new Date() });
-      }
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    const decoded = token ? verifyToken(token) : null;
+
+    if (decoded?.username) {
+      await User.findOneAndUpdate(
+        { username: decoded.username },
+        { $set: { isOnline: false, lastSeen: new Date() } }
+      );
+      logger.info({ username: decoded.username, podName: env.POD_NAME }, 'User logged out');
     }
-    return res.json({ success: true, message: 'Đăng xuất thành công' });
+
+    return res.status(200).json({ success: true });
   } catch (err: any) {
-    logger.error({ err: err.message }, 'Error in user logout');
-    return res.status(500).json({ error: 'Lỗi khi đăng xuất' });
+    logger.error({ err: err.message }, 'Error during logout');
+    return res.status(500).json({ error: 'Lỗi máy chủ khi đăng xuất' });
   }
 });
 
