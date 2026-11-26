@@ -95,7 +95,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLogin, onRegister }) =
             </svg>
           </div>
           <span className="text-2xl sm:text-[26px] font-extrabold font-title tracking-tight text-[#15130F]">
-            Phòng Chat của đoàn xuân nam
+            Phòng Chat devops
           </span>
         </div>
 
